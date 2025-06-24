@@ -203,7 +203,7 @@ struct page_pool *ux_page_pool_create(gfp_t gfp_mask, unsigned int order, unsign
 	for (i = 0; i < POOL_MIGRATETYPE_TYPES_SIZE; i++) {
 		pool->count[i] = 0;
 		/* MIGRATETYPE: UNMOVABLE & MOVABLE */
-		pool->high[i] = nr_pages/POOL_MIGRATETYPE_TYPES_SIZE;
+		pool->high[i] = (nr_pages / POOL_MIGRATETYPE_TYPES_SIZE) >> order;
 		/* wakeup kthread on count < low*/
 		pool->low[i]  = pool->high[i]/2;
 		INIT_LIST_HEAD(&pool->items[i]);
@@ -233,6 +233,12 @@ static struct page *page_pool_remove(struct page_pool *pool, int migratetype)
 
 	spin_lock_irqsave(&pool->lock, flags);
 	page = list_first_entry_or_null(&pool->items[migratetype], struct page, lru);
+	/* FIXME: migratetype is not needed for uxmem pool and needs to be removed. */
+	if (!page) {
+		/* fallback to the other migratetype */
+		migratetype = (migratetype + 1) % POOL_MIGRATETYPE_TYPES_SIZE;
+		page = list_first_entry_or_null(&pool->items[migratetype], struct page, lru);
+	}
 	if (page) {
 		pool->count[migratetype]--;
 		list_del(&page->lru);
@@ -728,7 +734,9 @@ static void unregister_uxmem_opt_vendor_hooks(void)
 static int __init uxmem_opt_init(void)
 {
 	int ret = 0;
-
+	if (true) {
+		return 0;
+	}
 	if (!enable) {
 		pr_err("oplus_bsp_uxmem_opt is disabled in cmdline\n");
 		return 0;
